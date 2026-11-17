@@ -8,6 +8,11 @@ Features user registration, token-based authentication, per-minute rate limiting
 
 ## 🚀 Key Features
 
+* **Interactive Modern Frontend**:
+  * **Landing Page** (`/`): High-converting dark UI with interactive live playground, quickstart code tabs (cURL, Python, JS), feature breakdowns, and pricing tables.
+  * **Developer Sign Up** (`/signup/`): Instant registration with automated token generation and 60 req/min quota.
+  * **Sign In** (`/login/`): Secure session login for developers.
+  * **Developer Dashboard** (`/dashboard/`): Manage API token, show/hide credentials, test live queries with your actual key, and view personalized code snippets.
 * **Game Details by Name or ID**: Retrieve complete game profiles by numeric ID (`/api/games/1/`), slug (`/api/games/cyber-runner-2099/`), exact/partial title, or query parameter (`/api/games/by-name/?name=Galaxy Drift`).
 * **Token Authentication & User Registration**: Developers can sign up (`/api/auth/register/`), obtain access tokens, and make authorized requests with `Authorization: Token <key>`.
 * **Rate Limiting (Calls per Minute)**: Dynamic throttle limiting requests per minute (defaults to 60 calls/minute for the Free tier), returning standard `HTTP 429 Too Many Requests` when exceeded.

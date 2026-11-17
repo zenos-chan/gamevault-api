@@ -30,11 +30,10 @@ class GameDatabaseAPITests(APITestCase):
         self.auth_headers = {'HTTP_AUTHORIZATION': f'Token {self.token.key}'}
 
     def test_api_root(self):
-        url = reverse('project-home')
-        response = self.client.get(url)
+        url = reverse('api-root')
+        response = self.client.get(url, **self.auth_headers)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn('authentication', response.json())
-        self.assertIn('endpoints', response.json())
+        self.assertIn('games', response.json())
 
     def test_user_registration(self):
         url = reverse('auth-register')
@@ -134,3 +133,50 @@ class GameDatabaseAPITests(APITestCase):
         res = self.client.get('/admin/games/game/')
         self.assertEqual(res.status_code, status.HTTP_301_MOVED_PERMANENTLY)
         self.assertEqual(res.url, '/admin/games/')
+
+    def test_frontend_pages(self):
+        # 1. Landing Page
+        res_landing = self.client.get(reverse('landing-page'))
+        self.assertEqual(res_landing.status_code, status.HTTP_200_OK)
+        self.assertContains(res_landing, "GameVault")
+
+        # 2. Signup Page
+        res_signup = self.client.get(reverse('signup'))
+        self.assertEqual(res_signup.status_code, status.HTTP_200_OK)
+
+        # 3. Login Page
+        res_login = self.client.get(reverse('login'))
+        self.assertEqual(res_login.status_code, status.HTTP_200_OK)
+
+        # 4. Dashboard unauthenticated redirect
+        res_dash_unauth = self.client.get(reverse('dashboard'))
+        self.assertEqual(res_dash_unauth.status_code, status.HTTP_302_FOUND)
+
+        # 5. Dashboard authenticated
+        self.client.force_login(self.user)
+        res_dash = self.client.get(reverse('dashboard'))
+        self.assertEqual(res_dash.status_code, status.HTTP_200_OK)
+        self.assertContains(res_dash, self.token.key)
+
+        # 6. Web Signup POST flow
+        self.client.logout()
+        res_web_signup = self.client.post(reverse('signup'), {
+            'username': 'web_dev_user',
+            'email': 'webdev@example.com',
+            'password': 'password123',
+            'password_confirm': 'password123',
+        })
+        self.assertRedirects(res_web_signup, reverse('dashboard'))
+
+        # Verify newly registered user is logged in on dashboard
+        res_after_signup = self.client.get(reverse('dashboard'))
+        self.assertEqual(res_after_signup.status_code, status.HTTP_200_OK)
+        self.assertContains(res_after_signup, "web_dev_user")
+
+        # 7. Web Login POST flow
+        self.client.logout()
+        res_web_login = self.client.post(reverse('login'), {
+            'username': 'web_dev_user',
+            'password': 'password123',
+        })
+        self.assertRedirects(res_web_login, reverse('dashboard'))

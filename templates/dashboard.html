@@ -1,0 +1,253 @@
+{% extends 'base.html' %}
+
+{% block title %}Developer Dashboard | GameVault API{% endblock %}
+
+{% block content %}
+<section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <!-- Header with User Profile Overview -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-8 border-b border-slate-800">
+        <div>
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 via-accent-purple to-accent-cyan flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-brand-500/20">
+                    {{ user.username|first|upper }}
+                </div>
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight flex items-center gap-3">
+                        <span>Welcome, {{ user.username }}</span>
+                        {% if user.is_staff %}
+                        <a href="/admin/" class="text-xs font-mono font-normal px-2.5 py-1 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition">Admin Console</a>
+                        {% endif %}
+                    </h1>
+                    <p class="text-xs text-slate-400 font-mono mt-0.5">{{ user.email|default:"developer@account" }}</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold
+                {% if profile.tier == 'FREE' %}bg-blue-500/10 text-blue-400 border border-blue-500/20
+                {% elif profile.tier == 'PRO' %}bg-amber-500/10 text-amber-400 border border-amber-500/20
+                {% else %}bg-emerald-500/10 text-emerald-400 border border-emerald-500/20{% endif %}">
+                <i class="ph-bold ph-shield-check"></i>
+                <span>{{ profile.tier }} TIER ({{ profile.rate_limit_per_minute }}/min)</span>
+            </span>
+            <a href="{% url 'logout' %}" class="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-300 transition border border-slate-700/60">
+                Sign Out
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-8">
+        <!-- Left Column: Token & Quota -->
+        <div class="lg:col-span-5 space-y-6">
+            <!-- API Credentials Card -->
+            <div class="glass-panel p-6 rounded-2xl border border-slate-800 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-lg bg-brand-500/10 text-brand-400 flex items-center justify-center">
+                            <i class="ph-bold ph-key text-lg"></i>
+                        </div>
+                        <h2 class="text-base font-bold text-white">API Access Token</h2>
+                    </div>
+                    <span class="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> Active
+                    </span>
+                </div>
+
+                <p class="text-xs text-slate-400 mb-3">
+                    Include this token in the <code class="text-brand-300 font-mono">Authorization</code> header of every request.
+                </p>
+
+                <!-- Token Display Input -->
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2 bg-[#06090f] p-2 rounded-xl border border-slate-800">
+                        <input id="api-token-input" type="password" readonly value="{{ token }}" class="w-full bg-transparent font-mono text-xs sm:text-sm text-slate-200 px-2 focus:outline-none selection:bg-brand-500">
+                        <button onclick="toggleTokenVisibility()" id="toggle-vis-btn" title="Show / Hide" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition">
+                            <i id="vis-icon" class="ph-bold ph-eye"></i>
+                        </button>
+                        <button onclick="copyToken()" id="copy-token-btn" class="px-3 py-1.5 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-medium text-xs flex items-center gap-1.5 shadow transition">
+                            <i class="ph-bold ph-copy"></i>
+                            <span id="copy-token-text">Copy</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300/90 flex items-start gap-2">
+                    <i class="ph-bold ph-warning text-base flex-shrink-0 mt-0.5"></i>
+                    <span>Never share your API token in public repositories or client-side web apps.</span>
+                </div>
+            </div>
+
+            <!-- Subscription & Quota Card -->
+            <div class="glass-panel p-6 rounded-2xl border border-slate-800 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
+                            <i class="ph-bold ph-timer text-lg"></i>
+                        </div>
+                        <h2 class="text-base font-bold text-white">Rate Quota & Tier</h2>
+                    </div>
+                    <span class="text-xs font-mono text-slate-400">Status: Good</span>
+                </div>
+
+                <div class="p-4 rounded-xl bg-[#06090f] border border-slate-800 mb-4">
+                    <div class="flex items-center justify-between text-xs mb-2">
+                        <span class="text-slate-400">Current Allowance:</span>
+                        <span class="text-white font-mono font-bold">{{ profile.rate_limit_per_minute }} calls / min</span>
+                    </div>
+                    <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div class="bg-gradient-to-r from-brand-500 to-accent-purple h-2 rounded-full" style="width: 25%"></div>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px] text-slate-500 font-mono mt-2">
+                        <span>Window: 60 Seconds</span>
+                        <span>HTTP 429 on overrun</span>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-dashed border-slate-700/80 p-4 text-center">
+                    <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Need higher throughput?</h3>
+                    <p class="text-xs text-slate-400 mb-3">Upgrade to Pro (300 req/min) or Enterprise (1200+ req/min).</p>
+                    <button disabled class="w-full py-2 rounded-lg bg-slate-800/80 text-slate-400 text-xs font-semibold cursor-not-allowed border border-slate-700/60">
+                        Payment Gateway Hook (Coming Soon)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Interactive Sandbox & Personalized Snippets -->
+        <div class="lg:col-span-7 space-y-6">
+            <!-- Sandbox Card -->
+            <div class="glass-panel p-6 rounded-2xl border border-slate-800 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center">
+                            <i class="ph-bold ph-flask text-lg"></i>
+                        </div>
+                        <h2 class="text-base font-bold text-white">Live Request Sandbox</h2>
+                    </div>
+                    <span class="text-xs font-mono text-brand-400">Using Your Token</span>
+                </div>
+
+                <!-- Query Bar -->
+                <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                    <div class="relative flex-grow">
+                        <input id="dash-query" type="text" value="1" placeholder="Enter ID (1) or Title (Galaxy Drift)" class="w-full bg-[#06090f] text-white font-mono text-sm px-4 py-2.5 rounded-xl border border-slate-800 focus:outline-none focus:border-brand-500 transition">
+                    </div>
+                    <button onclick="runDashboardTest()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-600 to-accent-purple hover:from-brand-500 text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-lg shadow-brand-500/20 transition">
+                        <i class="ph-bold ph-lightning"></i>
+                        <span>Test API</span>
+                    </button>
+                </div>
+
+                <!-- Presets -->
+                <div class="flex items-center gap-2 flex-wrap text-xs mb-4">
+                    <span class="text-slate-400">Quick tests:</span>
+                    <button onclick="setDashQuery('1')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-300">ID: 1</button>
+                    <button onclick="setDashQuery('cyber-runner-2099')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-300">Cyber Runner</button>
+                    <button onclick="setDashQuery('Galaxy Drift')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-300">Galaxy Drift</button>
+                    <button onclick="setDashQuery('Shadow Tactics: Arena')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 font-mono text-slate-300">Shadow Tactics</button>
+                </div>
+
+                <!-- Result Box -->
+                <div class="rounded-xl overflow-hidden border border-slate-800 bg-[#06090f]">
+                    <div class="px-4 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-xs font-mono">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                            <span id="dash-status" class="text-emerald-400 font-bold">Ready</span>
+                        </div>
+                        <span id="dash-latency" class="text-slate-500">0ms</span>
+                    </div>
+                    <div class="p-4 max-h-72 overflow-y-auto">
+                        <pre id="dash-json" class="text-xs font-mono text-emerald-300 leading-relaxed whitespace-pre">// Click "Test API" to make an authorized call using your live token.</pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Personalized Code Snippets Card -->
+            <div class="glass-panel p-6 rounded-2xl border border-slate-800 shadow-xl">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="ph-bold ph-code text-brand-400"></i>
+                        <span>Pre-configured Code Snippet</span>
+                    </h2>
+                    <span class="text-xs text-slate-500 font-mono">Pre-filled with your token</span>
+                </div>
+
+                <div class="rounded-xl overflow-hidden border border-slate-800 bg-[#06090f]">
+                    <div class="p-4 overflow-x-auto text-xs font-mono text-slate-300">
+                        <pre class="leading-relaxed"><span class="text-slate-500"># Direct cURL call from your terminal:</span>
+curl -s http://127.0.0.1:8000/api/games/1/ \
+  -H <span class="text-emerald-400">"Authorization: Token {{ token }}"</span></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    const userToken = "{{ token }}";
+
+    // Toggle token hide/show
+    function toggleTokenVisibility() {
+        const input = document.getElementById('api-token-input');
+        const icon = document.getElementById('vis-icon');
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.className = 'ph-bold ph-eye-slash';
+        } else {
+            input.type = 'password';
+            icon.className = 'ph-bold ph-eye';
+        }
+    }
+
+    // Copy token to clipboard
+    function copyToken() {
+        navigator.clipboard.writeText(userToken);
+        const text = document.getElementById('copy-token-text');
+        text.textContent = 'Copied!';
+        setTimeout(() => text.textContent = 'Copy', 2000);
+    }
+
+    // Dashboard live tester
+    function setDashQuery(val) {
+        document.getElementById('dash-query').value = val;
+        runDashboardTest();
+    }
+
+    async function runDashboardTest() {
+        const query = document.getElementById('dash-query').value.trim();
+        const jsonEl = document.getElementById('dash-json');
+        const statusEl = document.getElementById('dash-status');
+        const latencyEl = document.getElementById('dash-latency');
+
+        if (!query) return;
+
+        jsonEl.textContent = '// Querying API with your Token...';
+        const t0 = performance.now();
+
+        try {
+            const res = await fetch(`/api/games/${encodeURIComponent(query)}/`, {
+                headers: {
+                    'Authorization': `Token ${userToken}`
+                }
+            });
+            const duration = Math.round(performance.now() - t0);
+            latencyEl.textContent = `${duration}ms`;
+
+            statusEl.textContent = `${res.status} ${res.statusText}`;
+            statusEl.className = res.ok ? "text-emerald-400 font-bold" : "text-rose-400 font-bold";
+
+            const data = await res.json();
+            jsonEl.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+            statusEl.textContent = "Request Failed";
+            statusEl.className = "text-rose-400 font-bold";
+            jsonEl.textContent = JSON.stringify({ "error": err.message }, null, 2);
+        }
+    }
+</script>
+{% endblock %}

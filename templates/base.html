@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}GameVault API | The Modern Game Metadata & Catalog API{% endblock %}</title>
+    <!-- Inter & JetBrains Mono Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web@2.0.3"></script>
+    <!-- Tailwind CSS with custom styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                        },
+                        accent: {
+                            purple: '#a855f7',
+                            cyan: '#06b6d4',
+                            emerald: '#10b981',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbar & glass styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090d16;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+        .glow-effect {
+            box-shadow: 0 0 50px -10px rgba(99, 102, 241, 0.25);
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(51, 65, 85, 0.5);
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-[#0b0f19] text-slate-100 font-sans min-h-screen flex flex-col selection:bg-brand-500 selection:text-white antialiased">
+
+    <!-- Global Navigation -->
+    <header class="sticky top-0 z-50 glass-panel border-b border-slate-800/80">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand Logo -->
+            <a href="{% url 'landing-page' %}" class="flex items-center gap-2.5 group">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 via-accent-purple to-accent-cyan flex items-center justify-center text-white shadow-lg shadow-brand-500/30 group-hover:scale-105 transition-transform duration-200">
+                    <i class="ph-bold ph-game-controller text-xl"></i>
+                </div>
+                <div class="flex flex-col">
+                    <span class="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-brand-400 bg-clip-text text-transparent">GameVault<span class="text-brand-400">API</span></span>
+                    <span class="text-[10px] uppercase font-mono tracking-wider text-slate-400 -mt-1">v2.0 Developer API</span>
+                </div>
+            </a>
+
+            <!-- Desktop Nav Links -->
+            <nav class="hidden md:flex items-center gap-7 text-sm font-medium text-slate-300">
+                <a href="/#features" class="hover:text-white transition-colors">Features</a>
+                <a href="/#documentation" class="hover:text-white transition-colors">Documentation</a>
+                <a href="/#playground" class="hover:text-white transition-colors">Live Demo</a>
+                <a href="/#pricing" class="hover:text-white transition-colors">Pricing & Limits</a>
+                <a href="/api/" class="text-xs font-mono px-2 py-1 rounded-md bg-slate-800 text-brand-300 hover:bg-slate-700 transition">REST Endpoints</a>
+            </nav>
+
+            <!-- User Status / Auth Actions -->
+            <div class="flex items-center gap-3">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'dashboard' %}" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-sm font-medium text-slate-200 border border-slate-700/60 transition shadow-sm">
+                        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                        <i class="ph-bold ph-gauge text-brand-400"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="{% url 'logout' %}" class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-rose-400 hover:bg-slate-800/40 transition">
+                        Sign Out
+                    </a>
+                {% else %}
+                    <a href="{% url 'login' %}" class="px-3.5 py-1.5 rounded-lg text-sm font-medium text-slate-300 hover:text-white transition">
+                        Sign In
+                    </a>
+                    <a href="{% url 'signup' %}" class="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-accent-purple hover:from-brand-500 hover:to-accent-purple text-sm font-semibold text-white shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 transition duration-200">
+                        <span>Get Free API Key</span>
+                        <i class="ph-bold ph-arrow-right text-xs"></i>
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
+
+    <!-- Flash Messages -->
+    {% if messages %}
+    <div class="max-w-4xl mx-auto px-4 mt-4 w-full">
+        {% for message in messages %}
+        <div class="p-3.5 rounded-xl border flex items-center justify-between text-sm shadow-md mb-2
+            {% if message.tags == 'error' %}bg-rose-950/60 border-rose-800/60 text-rose-200
+            {% elif message.tags == 'success' %}bg-emerald-950/60 border-emerald-800/60 text-emerald-200
+            {% else %}bg-slate-900 border-slate-700 text-slate-200{% endif %}">
+            <div class="flex items-center gap-2.5">
+                {% if message.tags == 'error' %}<i class="ph-bold ph-warning-circle text-lg text-rose-400"></i>
+                {% elif message.tags == 'success' %}<i class="ph-bold ph-check-circle text-lg text-emerald-400"></i>
+                {% else %}<i class="ph-bold ph-info text-lg text-brand-400"></i>{% endif %}
+                <span>{{ message }}</span>
+            </div>
+            <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white">
+                <i class="ph ph-x"></i>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Main Content Block -->
+    <main class="flex-grow">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Global Footer -->
+    <footer class="border-t border-slate-800/80 bg-[#070b13] py-12 text-slate-400 text-sm mt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-7 h-7 rounded-lg bg-brand-600 flex items-center justify-center text-white">
+                        <i class="ph-bold ph-game-controller text-sm"></i>
+                    </div>
+                    <span class="font-bold text-slate-200">GameVault API</span>
+                    <span class="text-slate-600">|</span>
+                    <span class="text-xs text-slate-500">Commercial Game Metadata Engine</span>
+                </div>
+                <div class="flex items-center gap-6 text-xs text-slate-400 font-mono">
+                    <span class="flex items-center gap-1.5 text-emerald-400">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span> API Operational
+                    </span>
+                    <a href="/api/" class="hover:text-slate-200 transition">REST Endpoints</a>
+                    <a href="/admin/" class="hover:text-slate-200 transition">Admin Portal</a>
+                </div>
+            </div>
+            <div class="mt-8 pt-6 border-t border-slate-800/40 text-xs text-center text-slate-500">
+                &copy; 2026 GameVault API. Production-ready Django & DRF Game Platform.
+            </div>
+        </div>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
