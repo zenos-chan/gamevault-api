@@ -102,6 +102,19 @@ python manage.py runserver
 * **Username**: `admin`
 * **Password**: `admin123`
 
+### Clean & SEO-Friendly Admin Routes
+
+| Section | Clean Modern URL | Legacy Redirected URL |
+| :--- | :--- | :--- |
+| **Games Catalog** | `/admin/games/` | `/admin/games/game/` (301 redirect) |
+| **Players** | `/admin/players/` | `/admin/games/player/` (301 redirect) |
+| **Leaderboards** | `/admin/leaderboards/` | `/admin/games/gamescore/` (301 redirect) |
+| **Achievements** | `/admin/achievements/` | `/admin/games/achievement/` (301 redirect) |
+| **Player Badges** | `/admin/badges/` | `/admin/games/playerachievement/` (301 redirect) |
+| **Match Sessions** | `/admin/sessions/` | `/admin/games/gamesession/` (301 redirect) |
+| **Users** | `/admin/users/` | `/admin/auth/user/` (301 redirect) |
+| **Groups** | `/admin/groups/` | `/admin/auth/group/` (301 redirect) |
+
 ---
 
 ## Project Structure
