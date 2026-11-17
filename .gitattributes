@@ -1,0 +1,10 @@
+# Auto detect text files and perform LF normalization on checkout
+* text=auto
+
+# Keep shell scripts LF
+*.sh text eol=lf
+
+# Keep Windows batch files CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf

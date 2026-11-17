@@ -1,0 +1,23 @@
+# Virtual Environment
+env/
+.venv/
+venv/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django database & media
+*.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# macOS
+.DS_Store
+
+# IDEs
+.vscode/
+.idea/
