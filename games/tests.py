@@ -112,3 +112,17 @@ class GameAPITests(APITestCase):
         self.assertEqual(finish_res.status_code, status.HTTP_200_OK)
         self.assertEqual(finish_res.json()['session']['status'], 'COMPLETED')
         self.assertEqual(finish_res.json()['session']['winner_gamer_tag'], 'StarLord99')
+
+    def test_clean_admin_urls_and_redirects(self):
+        # Verify clean URL reverse mappings
+        self.assertEqual(reverse('admin:games_game_changelist'), '/admin/games/')
+        self.assertEqual(reverse('admin:games_player_changelist'), '/admin/players/')
+        self.assertEqual(reverse('admin:games_gamescore_changelist'), '/admin/leaderboards/')
+        self.assertEqual(reverse('admin:games_achievement_changelist'), '/admin/achievements/')
+        self.assertEqual(reverse('admin:games_playerachievement_changelist'), '/admin/badges/')
+        self.assertEqual(reverse('admin:games_gamesession_changelist'), '/admin/sessions/')
+
+        # Verify legacy ugly URL (/admin/games/game/) redirects permanently (301) to /admin/games/
+        res_legacy = self.client.get('/admin/games/game/')
+        self.assertEqual(res_legacy.status_code, status.HTTP_301_MOVED_PERMANENTLY)
+        self.assertEqual(res_legacy.url, '/admin/games/')
