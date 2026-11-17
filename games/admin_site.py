@@ -15,11 +15,8 @@ class CleanUnfoldAdminSite(UnfoldAdminSite):
 
     MODEL_ROUTES = {
         'games.game': 'games',
-        'games.player': 'players',
-        'games.gamescore': 'leaderboards',
-        'games.achievement': 'achievements',
-        'games.playerachievement': 'badges',
-        'games.gamesession': 'sessions',
+        'games.apiuserprofile': 'subscribers',
+        'authtoken.tokenproxy': 'tokens',
         'auth.user': 'users',
         'auth.group': 'groups',
     }

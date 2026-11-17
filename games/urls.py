@@ -2,22 +2,22 @@ from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    AchievementViewSet,
-    GameScoreViewSet,
-    GameSessionViewSet,
+    CurrentUserProfileView,
     GameViewSet,
-    PlayerAchievementViewSet,
-    PlayerViewSet,
+    LoginView,
+    RegisterView,
 )
 
 router = DefaultRouter()
 router.register(r'games', GameViewSet, basename='game')
-router.register(r'players', PlayerViewSet, basename='player')
-router.register(r'scores', GameScoreViewSet, basename='gamescore')
-router.register(r'achievements', AchievementViewSet, basename='achievement')
-router.register(r'player-achievements', PlayerAchievementViewSet, basename='playerachievement')
-router.register(r'sessions', GameSessionViewSet, basename='gamesession')
 
 urlpatterns = [
+    # Authentication & API Key Management
+    path('auth/register/', RegisterView.as_view(), name='auth-register'),
+    path('auth/login/', LoginView.as_view(), name='auth-login'),
+    path('auth/token/', LoginView.as_view(), name='auth-token'),
+    path('auth/me/', CurrentUserProfileView.as_view(), name='auth-me'),
+
+    # Game API endpoints
     path('', include(router.urls)),
 ]

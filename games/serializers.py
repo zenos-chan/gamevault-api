@@ -1,88 +1,124 @@
+from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 from rest_framework import serializers
-from .models import Game, Player, GameScore, Achievement, PlayerAchievement, GameSession
+from rest_framework.authtoken.models import Token
 
-
-class AchievementSerializer(serializers.ModelSerializer):
-    game_title = serializers.ReadOnlyField(source='game.title')
-
-    class Meta:
-        model = Achievement
-        fields = ['id', 'game', 'game_title', 'name', 'description', 'points', 'badge_icon', 'created_at']
-
-
-class PlayerAchievementSerializer(serializers.ModelSerializer):
-    gamer_tag = serializers.ReadOnlyField(source='player.gamer_tag')
-    achievement_name = serializers.ReadOnlyField(source='achievement.name')
-    achievement_points = serializers.ReadOnlyField(source='achievement.points')
-    badge_icon = serializers.ReadOnlyField(source='achievement.badge_icon')
-
-    class Meta:
-        model = PlayerAchievement
-        fields = ['id', 'player', 'gamer_tag', 'achievement', 'achievement_name', 'achievement_points', 'badge_icon', 'unlocked_at']
-
-    def create(self, validated_data):
-        player_achievement = super().create(validated_data)
-        # Award XP corresponding to achievement points
-        player = player_achievement.player
-        player.add_xp(player_achievement.achievement.points)
-        return player_achievement
-
-
-class GameScoreSerializer(serializers.ModelSerializer):
-    player_gamer_tag = serializers.ReadOnlyField(source='player.gamer_tag')
-    game_title = serializers.ReadOnlyField(source='game.title')
-
-    class Meta:
-        model = GameScore
-        fields = ['id', 'game', 'game_title', 'player', 'player_gamer_tag', 'score', 'metadata', 'achieved_at']
-
-    def create(self, validated_data):
-        score_entry = super().create(validated_data)
-        # Award base XP for playing and recording a score (10 XP + 1 XP per 1,000 score, capped at 100 XP per submit)
-        base_xp = 10
-        extra_xp = min(int(score_entry.score // 1000), 90)
-        score_entry.player.add_xp(base_xp + extra_xp)
-        return score_entry
+from .models import ApiUserProfile, Game
 
 
 class GameSerializer(serializers.ModelSerializer):
-    scores_count = serializers.IntegerField(source='scores.count', read_only=True)
-    achievements_count = serializers.IntegerField(source='achievements.count', read_only=True)
-
     class Meta:
         model = Game
         fields = [
-            'id', 'title', 'slug', 'genre', 'description', 'developer',
-            'release_date', 'max_players', 'is_active', 'scores_count',
-            'achievements_count', 'created_at', 'updated_at'
+            'id',
+            'title',
+            'slug',
+            'genre',
+            'description',
+            'developer',
+            'publisher',
+            'release_date',
+            'platforms',
+            'rating',
+            'website',
+            'metadata',
+            'is_active',
+            'created_at',
+            'updated_at',
         ]
-        read_only_fields = ['slug', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'slug', 'created_at', 'updated_at']
 
 
-class PlayerSerializer(serializers.ModelSerializer):
-    unlocked_achievements_count = serializers.IntegerField(source='unlocked_achievements.count', read_only=True)
-    total_scores_recorded = serializers.IntegerField(source='scores.count', read_only=True)
+class UserRegistrationSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=6, style={'input_type': 'password'})
+    token = serializers.SerializerMethodField(read_only=True)
+    rate_limit_per_minute = serializers.SerializerMethodField(read_only=True)
+    tier = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
-        model = Player
-        fields = [
-            'id', 'username', 'email', 'gamer_tag', 'level', 'experience_points',
-            'status', 'unlocked_achievements_count', 'total_scores_recorded',
-            'created_at', 'updated_at'
-        ]
-        read_only_fields = ['level', 'experience_points', 'created_at', 'updated_at']
+        model = User
+        fields = ['id', 'username', 'email', 'password', 'token', 'tier', 'rate_limit_per_minute']
+
+    def validate_username(self, value):
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("A user with this username already exists.")
+        return value
+
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data.get('email', ''),
+            password=validated_data['password']
+        )
+        return user
+
+    def get_token(self, obj):
+        token, _ = Token.objects.get_or_create(user=obj)
+        return token.key
+
+    def get_tier(self, obj):
+        if hasattr(obj, 'api_profile'):
+            return obj.api_profile.tier
+        return 'FREE'
+
+    def get_rate_limit_per_minute(self, obj):
+        if hasattr(obj, 'api_profile'):
+            return obj.api_profile.rate_limit_per_minute
+        return 60
 
 
-class GameSessionSerializer(serializers.ModelSerializer):
-    game_title = serializers.ReadOnlyField(source='game.title')
-    players_count = serializers.IntegerField(source='players.count', read_only=True)
-    winner_gamer_tag = serializers.ReadOnlyField(source='winner.gamer_tag')
+class UserLoginSerializer(serializers.Serializer):
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    token = serializers.CharField(read_only=True)
+    user_id = serializers.IntegerField(read_only=True)
+    tier = serializers.CharField(read_only=True)
+    rate_limit_per_minute = serializers.IntegerField(read_only=True)
+
+    def validate(self, attrs):
+        username = attrs.get('username')
+        password = attrs.get('password')
+
+        if not username or not password:
+            raise serializers.ValidationError("Must provide both username and password.")
+
+        user = authenticate(username=username, password=password)
+        if not user:
+            raise serializers.ValidationError("Invalid username or password.")
+
+        if not user.is_active:
+            raise serializers.ValidationError("This user account is inactive.")
+
+        token, _ = Token.objects.get_or_create(user=user)
+        tier = 'FREE'
+        rate_limit = 60
+        if hasattr(user, 'api_profile'):
+            tier = user.api_profile.tier
+            rate_limit = user.api_profile.rate_limit_per_minute
+
+        return {
+            'username': user.username,
+            'token': token.key,
+            'user_id': user.id,
+            'tier': tier,
+            'rate_limit_per_minute': rate_limit,
+        }
+
+
+class ApiUserProfileSerializer(serializers.ModelSerializer):
+    username = serializers.ReadOnlyField(source='user.username')
+    email = serializers.ReadOnlyField(source='user.email')
+    token = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
-        model = GameSession
-        fields = [
-            'id', 'room_code', 'game', 'game_title', 'status', 'players',
-            'players_count', 'winner', 'winner_gamer_tag', 'started_at',
-            'ended_at', 'created_at'
-        ]
-        read_only_fields = ['room_code', 'created_at']
+        model = ApiUserProfile
+        fields = ['id', 'username', 'email', 'tier', 'rate_limit_per_minute', 'is_active', 'token', 'created_at']
+
+    def get_token(self, obj):
+        token, _ = Token.objects.get_or_create(user=obj.user)
+        return token.key

@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # Third-party apps
     'rest_framework',
+    'rest_framework.authtoken',
     # Local apps
     'games',
 ]
@@ -127,14 +128,24 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'games.throttles.PerMinuteUserRateThrottle',
+    ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
 
 UNFOLD = {
-    "SITE_TITLE": "Game Platform Admin",
-    "SITE_HEADER": "Game Platform Console",
-    "SITE_SUBHEADER": "API Operations & Real-time Player Data",
+    "SITE_TITLE": "Game Database Admin",
+    "SITE_HEADER": "Game API Management Console",
+    "SITE_SUBHEADER": "API Keys, Subscriptions & Game Catalog",
     "SITE_URL": "/",
     "SIDEBAR": {
         "show_search": True,
@@ -162,43 +173,28 @@ UNFOLD = {
                 ],
             },
             {
-                "title": "Game Management",
+                "title": "Catalog & Subscriptions",
                 "separator": True,
                 "items": [
                     {
-                        "title": "Games",
+                        "title": "Games Catalog",
                         "icon": "sports_esports",
                         "link": reverse_lazy("admin:games_game_changelist"),
                     },
                     {
-                        "title": "Players",
-                        "icon": "person",
-                        "link": reverse_lazy("admin:games_player_changelist"),
+                        "title": "API Subscribers & Tiers",
+                        "icon": "workspace_premium",
+                        "link": reverse_lazy("admin:games_apiuserprofile_changelist"),
                     },
                     {
-                        "title": "High Scores",
-                        "icon": "leaderboard",
-                        "link": reverse_lazy("admin:games_gamescore_changelist"),
-                    },
-                    {
-                        "title": "Achievements",
-                        "icon": "emoji_events",
-                        "link": reverse_lazy("admin:games_achievement_changelist"),
-                    },
-                    {
-                        "title": "Player Badges",
-                        "icon": "military_tech",
-                        "link": reverse_lazy("admin:games_playerachievement_changelist"),
-                    },
-                    {
-                        "title": "Game Sessions",
-                        "icon": "groups",
-                        "link": reverse_lazy("admin:games_gamesession_changelist"),
+                        "title": "API Access Tokens",
+                        "icon": "key",
+                        "link": reverse_lazy("admin:authtoken_tokenproxy_changelist"),
                     },
                 ],
             },
             {
-                "title": "Authentication",
+                "title": "User Management",
                 "separator": True,
                 "items": [
                     {

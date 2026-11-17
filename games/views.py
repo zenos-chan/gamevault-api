@@ -1,261 +1,132 @@
-from django.utils import timezone
-from rest_framework import status, viewsets
+from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from rest_framework import generics, permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import Achievement, Game, GameScore, GameSession, Player, PlayerAchievement
+from .models import ApiUserProfile, Game
 from .serializers import (
-    AchievementSerializer,
-    GameScoreSerializer,
+    ApiUserProfileSerializer,
     GameSerializer,
-    GameSessionSerializer,
-    PlayerAchievementSerializer,
-    PlayerSerializer,
+    UserLoginSerializer,
+    UserRegistrationSerializer,
 )
+from .throttles import PerMinuteUserRateThrottle
 
 
-class GameViewSet(viewsets.ModelViewSet):
-    queryset = Game.objects.all().prefetch_related('scores', 'achievements')
+class GameViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Game Database API.
+    Requires authentication via Token: `Authorization: Token <your_token>`.
+    Subject to per-minute rate limits.
+    """
+    queryset = Game.objects.filter(is_active=True)
     serializer_class = GameSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = [PerMinuteUserRateThrottle]
+    lookup_field = 'lookup_val'
+
+    def get_object(self):
+        """
+        Supports retrieving a game by ID, by exact slug, or by title!
+        Example:
+          /api/games/1/
+          /api/games/cyber-runner-2099/
+          /api/games/Cyber Runner 2099/
+        """
+        lookup_val = self.kwargs.get(self.lookup_field, '').strip()
+        queryset = self.filter_queryset(self.get_queryset())
+
+        # If numeric, lookup by ID first
+        if lookup_val.isdigit():
+            return get_object_or_404(queryset, id=int(lookup_val))
+
+        # Lookup by slug or case-insensitive title
+        game = queryset.filter(Q(slug__iexact=lookup_val) | Q(title__iexact=lookup_val)).first()
+        if game is not None:
+            return game
+
+        # Fallback partial title match if single match
+        matching_games = queryset.filter(title__icontains=lookup_val)
+        if matching_games.count() == 1:
+            return matching_games.first()
+
+        return get_object_or_404(queryset, slug__iexact=lookup_val)
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        # Search / filter by name or title
+        name = self.request.query_params.get('name') or self.request.query_params.get('title')
         genre = self.request.query_params.get('genre')
-        active = self.request.query_params.get('active')
+        developer = self.request.query_params.get('developer')
+        platform = self.request.query_params.get('platform')
+
+        if name:
+            queryset = queryset.filter(Q(title__icontains=name) | Q(slug__icontains=name))
         if genre:
             queryset = queryset.filter(genre__iexact=genre)
-        if active is not None:
-            is_active = active.lower() in ['true', '1']
-            queryset = queryset.filter(is_active=is_active)
+        if developer:
+            queryset = queryset.filter(developer__icontains=developer)
+        if platform:
+            queryset = queryset.filter(platforms__icontains=platform)
+
         return queryset
 
-    @action(detail=True, methods=['get'], url_path='leaderboard')
-    def leaderboard(self, request, pk=None):
-        """Get the top ranked scores for this game."""
-        game = self.get_object()
-        limit = int(request.query_params.get('limit', 10))
-        top_scores = (
-            GameScore.objects.filter(game=game)
-            .select_related('player')
-            .order_by('-score', '-achieved_at')[:limit]
-        )
-
-        leaderboard_data = []
-        for rank, entry in enumerate(top_scores, start=1):
-            leaderboard_data.append({
-                'rank': rank,
-                'score_id': entry.id,
-                'score': entry.score,
-                'player_id': entry.player.id,
-                'gamer_tag': entry.player.gamer_tag,
-                'metadata': entry.metadata,
-                'achieved_at': entry.achieved_at,
-            })
-
-        return Response({
-            'game_id': game.id,
-            'game_title': game.title,
-            'total_entries': len(leaderboard_data),
-            'leaderboard': leaderboard_data,
-        })
-
-    @action(detail=True, methods=['get'], url_path='achievements')
-    def achievements(self, request, pk=None):
-        """List all achievements for this game."""
-        game = self.get_object()
-        achievements = game.achievements.all()
-        serializer = AchievementSerializer(achievements, many=True)
-        return Response(serializer.data)
-
-
-class PlayerViewSet(viewsets.ModelViewSet):
-    queryset = Player.objects.all().prefetch_related('unlocked_achievements', 'scores')
-    serializer_class = PlayerSerializer
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        status_param = self.request.query_params.get('status')
-        if status_param:
-            queryset = queryset.filter(status__iexact=status_param)
-        return queryset
-
-    @action(detail=True, methods=['get'], url_path='profile')
-    def profile(self, request, pk=None):
-        """Full player summary with unlocked badges and recent scores."""
-        player = self.get_object()
-        recent_scores = (
-            GameScore.objects.filter(player=player)
-            .select_related('game')
-            .order_by('-achieved_at')[:5]
-        )
-        unlocked = (
-            PlayerAchievement.objects.filter(player=player)
-            .select_related('achievement', 'achievement__game')
-            .order_by('-unlocked_at')
-        )
-
-        return Response({
-            'player': PlayerSerializer(player).data,
-            'recent_scores': [
-                {
-                    'id': score.id,
-                    'game_title': score.game.title,
-                    'score': score.score,
-                    'achieved_at': score.achieved_at,
-                }
-                for score in recent_scores
-            ],
-            'unlocked_achievements': [
-                {
-                    'achievement_id': item.achievement.id,
-                    'game': item.achievement.game.title,
-                    'name': item.achievement.name,
-                    'points': item.achievement.points,
-                    'badge_icon': item.achievement.badge_icon,
-                    'unlocked_at': item.unlocked_at,
-                }
-                for item in unlocked
-            ],
-        })
-
-    @action(detail=True, methods=['post'], url_path='status')
-    def update_status(self, request, pk=None):
-        """Update player status (ONLINE, OFFLINE, IN_GAME)."""
-        player = self.get_object()
-        new_status = request.data.get('status', '').upper()
-        valid_statuses = dict(Player.STATUS_CHOICES).keys()
-        if new_status not in valid_statuses:
+    @action(detail=False, methods=['get'], url_path='by-name')
+    def by_name(self, request):
+        """
+        Explicit search endpoint by name query param:
+        GET /api/games/by-name/?name=Cyber Runner
+        """
+        name = request.query_params.get('name', '').strip()
+        if not name:
             return Response(
-                {'error': f"Invalid status. Must be one of: {list(valid_statuses)}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        player.status = new_status
-        player.save(update_fields=['status', 'updated_at'])
-        return Response({'message': f"Status updated to {new_status}", 'player': PlayerSerializer(player).data})
-
-
-class GameScoreViewSet(viewsets.ModelViewSet):
-    queryset = GameScore.objects.all().select_related('game', 'player')
-    serializer_class = GameScoreSerializer
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        game_id = self.request.query_params.get('game')
-        player_id = self.request.query_params.get('player')
-        if game_id:
-            queryset = queryset.filter(game_id=game_id)
-        if player_id:
-            queryset = queryset.filter(player_id=player_id)
-        return queryset
-
-
-class AchievementViewSet(viewsets.ModelViewSet):
-    queryset = Achievement.objects.all().select_related('game')
-    serializer_class = AchievementSerializer
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        game_id = self.request.query_params.get('game')
-        if game_id:
-            queryset = queryset.filter(game_id=game_id)
-        return queryset
-
-
-class PlayerAchievementViewSet(viewsets.ModelViewSet):
-    queryset = PlayerAchievement.objects.all().select_related('player', 'achievement', 'achievement__game')
-    serializer_class = PlayerAchievementSerializer
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        player_id = self.request.query_params.get('player')
-        if player_id:
-            queryset = queryset.filter(player_id=player_id)
-        return queryset
-
-
-class GameSessionViewSet(viewsets.ModelViewSet):
-    queryset = GameSession.objects.all().select_related('game', 'winner').prefetch_related('players')
-    serializer_class = GameSessionSerializer
-
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        game_id = self.request.query_params.get('game')
-        status_param = self.request.query_params.get('status')
-        if game_id:
-            queryset = queryset.filter(game_id=game_id)
-        if status_param:
-            queryset = queryset.filter(status__iexact=status_param)
-        return queryset
-
-    @action(detail=True, methods=['post'], url_path='join')
-    def join(self, request, pk=None):
-        """Add a player to an active waiting session."""
-        session = self.get_object()
-        if session.status != 'WAITING':
-            return Response(
-                {'error': f"Cannot join a session with status '{session.status}'."},
+                {'error': "Query parameter 'name' is required. Example: ?name=Cyber+Runner"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        player_id = request.data.get('player_id')
-        if not player_id:
-            return Response({'error': 'player_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        game = self.get_queryset().filter(Q(title__iexact=name) | Q(slug__iexact=name)).first()
+        if not game:
+            # Fallback to partial match
+            game = self.get_queryset().filter(title__icontains=name).first()
 
-        try:
-            player = Player.objects.get(pk=player_id)
-        except Player.DoesNotExist:
-            return Response({'error': 'Player not found'}, status=status.HTTP_404_NOT_FOUND)
+        if not game:
+            return Response({'error': f"Game with name '{name}' not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        if session.players.count() >= session.game.max_players:
-            return Response({'error': 'Session is full'}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(GameSerializer(game).data)
 
-        session.players.add(player)
-        return Response({
-            'message': f"Player '{player.gamer_tag}' joined session {session.room_code}",
-            'session': GameSessionSerializer(session).data,
-        })
 
-    @action(detail=True, methods=['post'], url_path='start')
-    def start(self, request, pk=None):
-        """Mark session as IN_PROGRESS."""
-        session = self.get_object()
-        if session.status != 'WAITING':
-            return Response(
-                {'error': f"Session cannot be started from status '{session.status}'."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        session.status = 'IN_PROGRESS'
-        session.started_at = timezone.now()
-        session.save(update_fields=['status', 'started_at'])
-        return Response({
-            'message': f"Session {session.room_code} started",
-            'session': GameSessionSerializer(session).data,
-        })
+class RegisterView(generics.CreateAPIView):
+    """
+    Public endpoint for new users to sign up and instantly receive an API access token.
+    POST /api/auth/register/
+    """
+    serializer_class = UserRegistrationSerializer
+    permission_classes = [permissions.AllowAny]
 
-    @action(detail=True, methods=['post'], url_path='finish')
-    def finish(self, request, pk=None):
-        """Mark session as COMPLETED and award winner if specified."""
-        session = self.get_object()
-        if session.status != 'IN_PROGRESS':
-            return Response(
-                {'error': f"Only sessions IN_PROGRESS can be finished (current status: '{session.status}')."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
-        winner_id = request.data.get('winner_id')
-        if winner_id:
-            try:
-                winner = session.players.get(pk=winner_id)
-                session.winner = winner
-                # Bonus XP for winning a multiplayer session
-                winner.add_xp(50)
-            except Player.DoesNotExist:
-                return Response({'error': 'Winner must be one of the players in this session.'}, status=status.HTTP_400_BAD_REQUEST)
+class LoginView(generics.GenericAPIView):
+    """
+    Public endpoint for existing users to retrieve their API access token.
+    POST /api/auth/token/ or POST /api/auth/login/
+    """
+    serializer_class = UserLoginSerializer
+    permission_classes = [permissions.AllowAny]
 
-        session.status = 'COMPLETED'
-        session.ended_at = timezone.now()
-        session.save(update_fields=['status', 'winner', 'ended_at'])
-        return Response({
-            'message': f"Session {session.room_code} completed",
-            'session': GameSessionSerializer(session).data,
-        })
+    def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+
+class CurrentUserProfileView(generics.RetrieveAPIView):
+    """
+    Protected endpoint to inspect your user subscription, API tier, token, and rate limit.
+    GET /api/auth/me/
+    """
+    serializer_class = ApiUserProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        profile, _ = ApiUserProfile.objects.get_or_create(user=self.request.user)
+        return profile

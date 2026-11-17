@@ -1,128 +1,136 @@
+from django.contrib.auth.models import User
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.authtoken.models import Token
 from rest_framework.test import APITestCase
-from games.models import Game, Player, GameScore, Achievement, PlayerAchievement, GameSession
+from games.models import ApiUserProfile, Game
 
 
-class GameAPITests(APITestCase):
+class GameDatabaseAPITests(APITestCase):
     def setUp(self):
+        # 1. Create a Game
         self.game = Game.objects.create(
-            title='Cosmic Defender',
-            genre='SHOOTER',
-            description='Arcade retro space shooter',
-            max_players=1
+            title='Cyber Runner 2099',
+            genre='ACTION',
+            description='Cyberpunk endless runner in neon cities',
+            developer='Neon Bytes Studio',
+            publisher='Cybernetic Arts',
+            rating=4.8,
+            platforms=['PC', 'PS5', 'Xbox'],
+            website='https://cyberrunner.example.com'
         )
-        self.player = Player.objects.create(
-            username='star_lord',
-            email='starlord@guardians.galaxy',
-            gamer_tag='StarLord99'
+
+        # 2. Create User and Token
+        self.user = User.objects.create_user(
+            username='subscriber1',
+            email='sub1@example.com',
+            password='password123'
         )
-        self.achievement = Achievement.objects.create(
-            game=self.game,
-            name='First Blood',
-            description='Destroy your first alien ship',
-            points=20
-        )
+        self.token = Token.objects.get(user=self.user)
+        self.auth_headers = {'HTTP_AUTHORIZATION': f'Token {self.token.key}'}
 
     def test_api_root(self):
         url = reverse('project-home')
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('authentication', response.json())
         self.assertIn('endpoints', response.json())
 
-    def test_list_games(self):
-        url = reverse('game-list')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(response.json()['count'], 1)
-
-    def test_create_game(self):
-        url = reverse('game-list')
+    def test_user_registration(self):
+        url = reverse('auth-register')
         payload = {
-            'title': 'Quantum Racer',
-            'genre': 'RACING',
-            'description': 'Hyper-speed racing',
-            'max_players': 4
+            'username': 'new_developer',
+            'email': 'newdev@example.com',
+            'password': 'securepassword123'
         }
         response = self.client.post(url, payload)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.json()['slug'], 'quantum-racer')
+        self.assertIn('token', response.json())
+        self.assertEqual(response.json()['tier'], 'FREE')
+        self.assertEqual(response.json()['rate_limit_per_minute'], 60)
 
-    def test_submit_score_and_leaderboard(self):
-        # Submit score
-        score_url = reverse('gamescore-list')
-        score_payload = {
-            'game': self.game.id,
-            'player': self.player.id,
-            'score': 55000,
-            'metadata': {'wave': 12, 'ships_destroyed': 140}
-        }
-        res_post = self.client.post(score_url, score_payload, format='json')
-        self.assertEqual(res_post.status_code, status.HTTP_201_CREATED)
-
-        # Verify leaderboard
-        lb_url = reverse('game-leaderboard', kwargs={'pk': self.game.id})
-        res_lb = self.client.get(lb_url)
-        self.assertEqual(res_lb.status_code, status.HTTP_200_OK)
-        lb_data = res_lb.json()
-        self.assertEqual(len(lb_data['leaderboard']), 1)
-        self.assertEqual(lb_data['leaderboard'][0]['score'], 55000)
-        self.assertEqual(lb_data['leaderboard'][0]['gamer_tag'], 'StarLord99')
-
-    def test_unlock_achievement_and_xp(self):
-        initial_xp = self.player.experience_points
-        url = reverse('playerachievement-list')
+    def test_user_login(self):
+        url = reverse('auth-login')
         payload = {
-            'player': self.player.id,
-            'achievement': self.achievement.id
+            'username': 'subscriber1',
+            'password': 'password123'
         }
         response = self.client.post(url, payload)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-
-        self.player.refresh_from_db()
-        self.assertEqual(self.player.experience_points, initial_xp + self.achievement.points)
-
-    def test_player_profile(self):
-        url = reverse('player-profile', kwargs={'pk': self.player.id})
-        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.json()['player']['gamer_tag'], 'StarLord99')
+        self.assertEqual(response.json()['token'], self.token.key)
 
-    def test_game_session_lifecycle(self):
-        # Create session
-        session_url = reverse('gamesession-list')
-        session_res = self.client.post(session_url, {'game': self.game.id})
-        self.assertEqual(session_res.status_code, status.HTTP_201_CREATED)
-        session_id = session_res.json()['id']
+    def test_unauthenticated_request_is_denied(self):
+        # Requesting without token must return 401
+        url = reverse('game-list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-        # Join session
-        join_url = reverse('gamesession-join', kwargs={'pk': session_id})
-        join_res = self.client.post(join_url, {'player_id': self.player.id})
-        self.assertEqual(join_res.status_code, status.HTTP_200_OK)
+    def test_authenticated_game_list(self):
+        url = reverse('game-list')
+        response = self.client.get(url, **self.auth_headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['count'], 1)
+        self.assertEqual(response.json()['results'][0]['title'], 'Cyber Runner 2099')
 
-        # Start session
-        start_url = reverse('gamesession-start', kwargs={'pk': session_id})
-        start_res = self.client.post(start_url)
-        self.assertEqual(start_res.status_code, status.HTTP_200_OK)
-        self.assertEqual(start_res.json()['session']['status'], 'IN_PROGRESS')
+    def test_get_game_details_by_id(self):
+        url = reverse('game-detail', kwargs={'lookup_val': self.game.id})
+        response = self.client.get(url, **self.auth_headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['title'], 'Cyber Runner 2099')
+        self.assertEqual(response.json()['rating'], '4.8')
+        self.assertIn('PS5', response.json()['platforms'])
 
-        # Finish session with winner
-        finish_url = reverse('gamesession-finish', kwargs={'pk': session_id})
-        finish_res = self.client.post(finish_url, {'winner_id': self.player.id})
-        self.assertEqual(finish_res.status_code, status.HTTP_200_OK)
-        self.assertEqual(finish_res.json()['session']['status'], 'COMPLETED')
-        self.assertEqual(finish_res.json()['session']['winner_gamer_tag'], 'StarLord99')
+    def test_get_game_details_by_slug(self):
+        url = reverse('game-detail', kwargs={'lookup_val': self.game.slug})
+        response = self.client.get(url, **self.auth_headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['id'], self.game.id)
+        self.assertEqual(response.json()['title'], 'Cyber Runner 2099')
 
-    def test_clean_admin_urls_and_redirects(self):
-        # Verify clean URL reverse mappings
+    def test_get_game_details_by_name_query(self):
+        url = reverse('game-by-name') + '?name=Cyber Runner 2099'
+        response = self.client.get(url, **self.auth_headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['id'], self.game.id)
+
+    def test_filter_games_by_name_parameter(self):
+        url = reverse('game-list') + '?name=runner'
+        response = self.client.get(url, **self.auth_headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['count'], 1)
+
+    def test_current_user_profile(self):
+        url = reverse('auth-me')
+        response = self.client.get(url, **self.auth_headers)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['username'], 'subscriber1')
+        self.assertEqual(response.json()['tier'], 'FREE')
+        self.assertEqual(response.json()['rate_limit_per_minute'], 60)
+
+    def test_rate_limiting_throttle(self):
+        from django.core.cache import cache
+        cache.clear()
+
+        # Set a low limit to test throttling
+        profile = self.user.api_profile
+        profile.rate_limit_per_minute = 3
+        profile.save()
+
+        url = reverse('game-list')
+        for i in range(3):
+            res = self.client.get(url, **self.auth_headers)
+            self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        # 4th request must be throttled with 429 Too Many Requests
+        res_throttled = self.client.get(url, **self.auth_headers)
+        self.assertEqual(res_throttled.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_clean_admin_urls(self):
         self.assertEqual(reverse('admin:games_game_changelist'), '/admin/games/')
-        self.assertEqual(reverse('admin:games_player_changelist'), '/admin/players/')
-        self.assertEqual(reverse('admin:games_gamescore_changelist'), '/admin/leaderboards/')
-        self.assertEqual(reverse('admin:games_achievement_changelist'), '/admin/achievements/')
-        self.assertEqual(reverse('admin:games_playerachievement_changelist'), '/admin/badges/')
-        self.assertEqual(reverse('admin:games_gamesession_changelist'), '/admin/sessions/')
+        self.assertEqual(reverse('admin:games_apiuserprofile_changelist'), '/admin/subscribers/')
+        self.assertEqual(reverse('admin:authtoken_tokenproxy_changelist'), '/admin/tokens/')
 
-        # Verify legacy ugly URL (/admin/games/game/) redirects permanently (301) to /admin/games/
-        res_legacy = self.client.get('/admin/games/game/')
-        self.assertEqual(res_legacy.status_code, status.HTTP_301_MOVED_PERMANENTLY)
-        self.assertEqual(res_legacy.url, '/admin/games/')
+        # 301 redirect from old legacy URL
+        res = self.client.get('/admin/games/game/')
+        self.assertEqual(res.status_code, status.HTTP_301_MOVED_PERMANENTLY)
+        self.assertEqual(res.url, '/admin/games/')

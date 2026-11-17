@@ -5,27 +5,27 @@ from django.urls import include, path
 
 def api_root(request):
     return JsonResponse({
-        'name': 'Game Platform REST API',
-        'version': '1.0.0',
+        'name': 'Game Database & Details REST API',
+        'version': '2.0.0',
         'database': 'SQLite',
-        'endpoints': {
-            'games': '/api/games/',
-            'players': '/api/players/',
-            'scores': '/api/scores/',
-            'achievements': '/api/achievements/',
-            'player_achievements': '/api/player-achievements/',
-            'sessions': '/api/sessions/',
-            'admin': '/admin/',
+        'authentication': {
+            'header': 'Authorization: Token <your_access_token>',
+            'sign_up': 'POST /api/auth/register/',
+            'get_token': 'POST /api/auth/token/ or POST /api/auth/login/',
+            'my_profile_and_limits': 'GET /api/auth/me/',
         },
-        'quick_actions': {
-            'game_leaderboard': '/api/games/{id}/leaderboard/',
-            'game_achievements': '/api/games/{id}/achievements/',
-            'player_profile': '/api/players/{id}/profile/',
-            'update_player_status': 'POST /api/players/{id}/status/ (body: {"status": "ONLINE|OFFLINE|IN_GAME"})',
-            'join_session': 'POST /api/sessions/{id}/join/ (body: {"player_id": <id>})',
-            'start_session': 'POST /api/sessions/{id}/start/',
-            'finish_session': 'POST /api/sessions/{id}/finish/ (body: {"winner_id": <id>})',
-        }
+        'rate_limits': {
+            'default_free_tier': '60 calls/minute',
+            'pro_tier': '300 calls/minute',
+            'enterprise_tier': '1200 calls/minute',
+        },
+        'endpoints': {
+            'list_games': 'GET /api/games/ (optional filters: ?name=..., ?genre=..., ?platform=...)',
+            'game_details_by_id': 'GET /api/games/{id}/',
+            'game_details_by_name_or_slug': 'GET /api/games/{name_or_slug}/',
+            'game_by_name_query': 'GET /api/games/by-name/?name={title}',
+            'admin_dashboard': '/admin/',
+        },
     })
 
 
