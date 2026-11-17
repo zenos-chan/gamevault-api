@@ -30,7 +30,13 @@ ALLOWED_HOSTS = ['*']
 
 # Application definition
 
+from django.urls import reverse_lazy
+
 INSTALLED_APPS = [
+    # Modern Admin Theme
+    'unfold',
+    'unfold.contrib.filters',
+    'unfold.contrib.forms',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -123,6 +129,92 @@ STATIC_URL = 'static/'
 REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
+}
+
+UNFOLD = {
+    "SITE_TITLE": "Game Platform Admin",
+    "SITE_HEADER": "Game Platform Console",
+    "SITE_SUBHEADER": "API Operations & Real-time Player Data",
+    "SITE_URL": "/",
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_applications": True,
+        "navigation": [
+            {
+                "title": "Quick Links",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Dashboard",
+                        "icon": "dashboard",
+                        "link": reverse_lazy("admin:index"),
+                    },
+                    {
+                        "title": "API Root Overview",
+                        "icon": "api",
+                        "link": "/",
+                    },
+                    {
+                        "title": "Browsable API",
+                        "icon": "explore",
+                        "link": "/api/",
+                    },
+                ],
+            },
+            {
+                "title": "Game Management",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Games",
+                        "icon": "sports_esports",
+                        "link": reverse_lazy("admin:games_game_changelist"),
+                    },
+                    {
+                        "title": "Players",
+                        "icon": "person",
+                        "link": reverse_lazy("admin:games_player_changelist"),
+                    },
+                    {
+                        "title": "High Scores",
+                        "icon": "leaderboard",
+                        "link": reverse_lazy("admin:games_gamescore_changelist"),
+                    },
+                    {
+                        "title": "Achievements",
+                        "icon": "emoji_events",
+                        "link": reverse_lazy("admin:games_achievement_changelist"),
+                    },
+                    {
+                        "title": "Player Badges",
+                        "icon": "military_tech",
+                        "link": reverse_lazy("admin:games_playerachievement_changelist"),
+                    },
+                    {
+                        "title": "Game Sessions",
+                        "icon": "groups",
+                        "link": reverse_lazy("admin:games_gamesession_changelist"),
+                    },
+                ],
+            },
+            {
+                "title": "Authentication",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Users",
+                        "icon": "manage_accounts",
+                        "link": reverse_lazy("admin:auth_user_changelist"),
+                    },
+                    {
+                        "title": "Groups",
+                        "icon": "badge",
+                        "link": reverse_lazy("admin:auth_group_changelist"),
+                    },
+                ],
+            },
+        ],
+    },
 }
 
 
